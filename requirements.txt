@@ -3,3 +3,4 @@ gunicorn
 numpy<2.0
 opencv-python
 pybind11>=2.12
+Pillow
