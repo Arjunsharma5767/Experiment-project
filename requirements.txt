@@ -4,3 +4,7 @@ numpy<2.0
 opencv-python
 pybind11>=2.12
 Pillow
+flask==2.3.2
+opencv-python-headless==4.9.0.80
+numpy==1.24.4
+werkzeug==2.3.7
