@@ -1,160 +1,79 @@
-# app.py
-from flask import Flask, render_template_string, request
+from flask import Flask, request, render_template_string, send_file
+import cv2
+import numpy as np
 import os
+from io import BytesIO
+from PIL import Image
 
 app = Flask(__name__)
 
-# HTML Template with embedded CSS and JS
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> Calculator</title>
-    <!-- Bootstrap 5 CSS -->
+    <title>Image Pencil Sketch</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
-            background-color: #f8f9fa;
-            padding: 20px;
+            padding: 2rem;
+            background-color: #f0f2f5;
         }
-        .calculator-container {
+        .container {
             max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background: white;
+        }
+        img {
+            max-width: 100%;
+            margin-top: 1rem;
+            border: 1px solid #ccc;
             border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
-        }
-        .calculator-header {
-            text-align: center;
-            margin-bottom: 30px;
-            color: #0d6efd;
-        }
-        .form-control, .form-select {
-            border-radius: 8px;
-            padding: 12px 15px;
-            margin-bottom: 15px;
-        }
-        .btn-calculate {
-            background-color: #0d6efd;
-            border: none;
-            padding: 12px;
-            font-weight: 600;
-            width: 100%;
-            border-radius: 8px;
-        }
-        .result-container {
-            margin-top: 25px;
-            padding: 15px;
-            border-radius: 8px;
-            background-color: #f8f9fa;
-            display: {% if result is not none %}block{% else %}none{% endif %};
-        }
-        .operation-explanation {
-            font-size: 0.9em;
-            color: #6c757d;
-            margin-top: 5px;
         }
     </style>
 </head>
 <body>
-    <div class="calculator-container">
-        <h1 class="calculator-header">Percentage Calculator</h1>
-        
-        <form method="POST" action="/">
-            <div class="mb-3">
-                <label for="number" class="form-label">Number</label>
-                <input type="number" step="any" class="form-control" id="number" name="number" required
-                       value="{{ request.form.get('number', '') }}">
-            </div>
-            
-            <div class="mb-3">
-                <label for="percent" class="form-label">Percentage</label>
-                <input type="number" step="any" class="form-control" id="percent" name="percent" required
-                       value="{{ request.form.get('percent', '') }}">
-            </div>
-            
-            <div class="mb-3">
-                <label class="form-label">Operation</label>
-                <select class="form-select" name="operation" id="operation">
-                    <option value="of" {% if request.form.get('operation') == 'of' %}selected{% endif %}>What is X% of Y?</option>
-                    <option value="what" {% if request.form.get('operation') == 'what' %}selected{% endif %}>X is what % of Y?</option>
-                    <option value="increase" {% if request.form.get('operation') == 'increase' %}selected{% endif %}>Increase X by Y%</option>
-                    <option value="decrease" {% if request.form.get('operation') == 'decrease' %}selected{% endif %}>Decrease X by Y%</option>
-                </select>
-                <div class="operation-explanation" id="operation-explanation">
-                    {% if request.form.get('operation') == 'of' %}
-                        Calculates what X percent of Y is
-                    {% elif request.form.get('operation') == 'what' %}
-                        Calculates what percentage X is of Y
-                    {% elif request.form.get('operation') == 'increase' %}
-                        Increases X by Y percent
-                    {% elif request.form.get('operation') == 'decrease' %}
-                        Decreases X by Y percent
-                    {% else %}
-                        Select an operation to see explanation
-                    {% endif %}
-                </div>
-            </div>
-            
-            <button type="submit" class="btn btn-primary btn-calculate">Calculate</button>
+    <div class="container text-center">
+        <h1 class="mb-4">🖼️ Image to Pencil Sketch</h1>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="file" name="image" class="form-control mb-3" required>
+            <button type="submit" class="btn btn-primary">Convert to Sketch</button>
         </form>
-        
-        {% if result is not none %}
-        <div class="result-container">
-            <h4>Result</h4>
-            <p class="mb-0">{{ result }}</p>
-        </div>
+        {% if sketch_url %}
+            <h3 class="mt-4">Sketch Result</h3>
+            <img src="{{ sketch_url }}" alt="Sketch">
         {% endif %}
     </div>
-
-    <!-- Bootstrap 5 JS Bundle with Popper -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <script>
-        // Update operation explanation when selection changes
-        document.getElementById('operation').addEventListener('change', function() {
-            const explanations = {
-                'of': 'Calculates what X percent of Y is',
-                'what': 'Calculates what percentage X is of Y',
-                'increase': 'Increases X by Y percent',
-                'decrease': 'Decreases X by Y percent'
-            };
-            document.getElementById('operation-explanation').textContent = explanations[this.value];
-        });
-    </script>
 </body>
 </html>
 """
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route("/", methods=["GET", "POST"])
 def index():
-    result = None
-    if request.method == 'POST':
-        try:
-            number = float(request.form['number'])
-            percent = float(request.form['percent'])
-            operation = request.form['operation']
-            
-            if operation == 'of':
-                calculation = (number * percent) / 100
-                result = f"{percent}% of {number} = {round(calculation, 2)}"
-            elif operation == 'what':
-                calculation = (percent / number) * 100
-                result = f"{percent} is {round(calculation, 2)}% of {number}"
-            elif operation == 'increase':
-                calculation = number * (1 + percent/100)
-                result = f"{number} increased by {percent}% = {round(calculation, 2)}"
-            elif operation == 'decrease':
-                calculation = number * (1 - percent/100)
-                result = f"{number} decreased by {percent}% = {round(calculation, 2)}"
-        except ValueError:
-            result = "Error: Please enter valid numbers"
-    
-    return render_template_string(HTML_TEMPLATE, result=result)
+    sketch_url = None
+    if request.method == "POST":
+        file = request.files["image"]
+        if file:
+            # Read image as OpenCV format
+            in_memory_file = BytesIO()
+            file.save(in_memory_file)
+            in_memory_file.seek(0)
+            file_bytes = np.frombuffer(in_memory_file.read(), dtype=np.uint8)
+            img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+            # Convert to sketch
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            inv = 255 - gray
+            blur = cv2.GaussianBlur(inv, (21, 21), 0)
+            sketch = cv2.divide(gray, 255 - blur, scale=256.0)
+
+            # Encode to PNG
+            _, buffer = cv2.imencode('.png', sketch)
+            img_bytes = BytesIO(buffer.tobytes())
+            img_bytes.seek(0)
+
+            return send_file(img_bytes, mimetype='image/png')
+
+    return render_template_string(HTML_TEMPLATE, sketch_url=sketch_url)
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
