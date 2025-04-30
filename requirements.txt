@@ -3,4 +3,4 @@ gunicorn==21.2.0
 numpy==1.26.4
 opencv-python-headless==4.9.0.80
 werkzeug==3.0.1
-gevent==24.2.1  # Add this line
+gevent==24.2.1  # Required for async workers
