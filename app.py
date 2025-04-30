@@ -35,17 +35,22 @@ def enhance_contrast(image):
     return cv2.cvtColor(cv2.merge((clahe.apply(l), a, b)), cv2.COLOR_LAB2BGR)
 
 def process_image(input_path, output_path):
-    original = cv2.imread(input_path)
-    original = resize_image(original)
+    # Read image in low-memory mode
+    original = cv2.imread(input_path, cv2.IMREAD_REDUCED_COLOR_2)
     
-    # Sequential processing with garbage collection
+    # Resize if larger than 1024px
+    h, w = original.shape[:2]
+    if max(h, w) > 1024:
+        scale = 1024 / max(h, w)
+        original = cv2.resize(original, (int(w*scale), int(h*scale)))
+    
+    # Sequential processing with cleanup
     denoised = denoise_image(original)
-    del original  # Free memory
+    del original
     
     enhanced = enhance_contrast(denoised)
     del denoised
     
-    enhanced = resize_image(enhanced)
     cv2.imwrite(output_path, enhanced)
     return enhanced
 
